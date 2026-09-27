@@ -1,0 +1,50 @@
+server:
+  port: 8080
+  # За балансировщиком адрес клиента берётся из X-Forwarded-For: FORWARD_HEADERS=framework.
+  # Без балансировщика заголовку не верим — его может подставить кто угодно.
+  forward-headers-strategy: ${FORWARD_HEADERS:none}
+  netty:
+    # Соединение, которое открыли и молчат, закрывается: иначе тысячи таких держат
+    # дескрипторы сервиса, и новым диспетчерам не хватает места.
+    connection-timeout: 5s
+    idle-timeout: 60s
+
+spring:
+  application:
+    name: tram-forecast-api
+  web:
+    resources:
+      # Экран диспетчера лежит рядом с сервисом и отдаётся тем же портом.
+      static-locations: file:/app/static/,classpath:/static/
+
+api:
+  user: ${API_USER:dispatcher}
+  password: ${API_PASSWORD:}
+  ingest-user: ${INGEST_USER:ingest}
+  ingest-password: ${INGEST_PASSWORD:}
+  guard:
+    bcrypt-per-second: ${GUARD_BCRYPT_PER_SECOND:8}
+    fails-per-ip: ${GUARD_FAILS_PER_IP:20}
+    block-minutes: ${GUARD_BLOCK_MINUTES:5}
+
+telemetry:
+  # Вагон без отметок дольше этого срока на экране помечается «нет связи».
+  stale-seconds: ${TELEMETRY_STALE_SECONDS:120}
+
+forecast:
+  file: ${FORECAST_FILE:/app/data/forecast.csv}
+
+stops:
+  # Доли остановок из tramflow.stops; без файлов метод /api/stops отвечает 404, остальное работает.
+  file: ${STOPS_FILE:/app/data/stop_shares.csv}
+  days: ${STOPS_DAYS:/app/data/day_types.csv}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+fact:
+  # Журнал принятого факта: после перезапуска копия читает его и продолжает с того же места.
+  journal: ${FACT_JOURNAL:/app/state/fact.log}

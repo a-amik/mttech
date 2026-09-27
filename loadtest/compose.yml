@@ -1,0 +1,50 @@
+# Контур нагрузочных проверок. Образ тот же, что уходит жюри (корневой Dockerfile),
+# лимиты — как в задании: 2 vCPU и 2 ГБ на копию.
+#   single — одна копия на порту 18080;
+#   pair   — две копии за nginx на том же порту, для масштабирования и отказа копии.
+name: ${COMPOSE_PROJECT_NAME:-tram-load}
+
+x-api: &api
+  image: ${IMAGE:-tram-forecast:load}
+  environment:
+    API_USER: dispatcher
+    API_PASSWORD: ${API_PASSWORD:-load-test}
+    INGEST_USER: ingest
+    INGEST_PASSWORD: ${INGEST_PASSWORD:-load-ingest}
+    GUARD_BCRYPT_PER_SECOND: ${GUARD_BCRYPT_PER_SECOND:-8}
+    GUARD_FAILS_PER_IP: ${GUARD_FAILS_PER_IP:-20}
+    TELEMETRY_STALE_SECONDS: ${TELEMETRY_STALE_SECONDS:-120}
+    STOPS_FILE: ${STOPS_FILE:-/app/data/stop_shares.csv}
+  deploy:
+    resources:
+      limits:
+        cpus: "2"
+        memory: 2g
+
+services:
+  api:
+    <<: *api
+    profiles: [single]
+    ports: ["${LOAD_PORT:-18080}:8080"]
+
+  api-a:
+    <<: *api
+    profiles: [pair]
+    environment: &pair-env
+      API_USER: dispatcher
+      API_PASSWORD: ${API_PASSWORD:-load-test}
+      INGEST_USER: ingest
+      INGEST_PASSWORD: ${INGEST_PASSWORD:-load-ingest}
+      FORWARD_HEADERS: framework
+
+  api-b:
+    <<: *api
+    profiles: [pair]
+    environment: *pair-env
+
+  lb:
+    image: nginx:1.27-alpine
+    profiles: [pair]
+    ports: ["${LOAD_PORT:-18080}:80"]
+    volumes: ["./nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [api-a, api-b]

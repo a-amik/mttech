@@ -1,0 +1,22 @@
+# Сервис и экран диспетчера одним контейнером: docker compose up
+# Экран — http://localhost:8080/, вход — jury / tramflow.
+# Пароли по умолчанию годятся только для проверки на своей машине;
+# свои задаются переменными окружения или файлом .env рядом.
+services:
+  tramflow:
+    image: ghcr.io/a-amik/tramflow:1.0
+    build: .
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    environment:
+      API_USER: ${API_USER:-jury}
+      API_PASSWORD: ${API_PASSWORD:-tramflow}
+      INGEST_USER: ${INGEST_USER:-ingest}
+      INGEST_PASSWORD: ${INGEST_PASSWORD:-ingest-tramflow}
+    volumes:
+      - tramflow-state:/app/state
+    restart: unless-stopped
+
+volumes:
+  tramflow-state:

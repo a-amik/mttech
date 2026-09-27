@@ -1,0 +1,15 @@
+# В образ едут только исходники фронта и API. Выгрузки, обученные артефакты
+# и локальные окружения в контекст сборки не попадают: их там четыре гигабайта.
+.git
+.venv
+data
+artifacts
+lab
+loadtest
+tramflow
+node_modules
+**/node_modules
+web/dist
+**/target
+*.log
+.env

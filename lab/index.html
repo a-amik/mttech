@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лаборатория прогноза</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root { --bg:#fff; --bg-2:#f7f7f5; --text:#1f1f1f; --text-2:#5f5e5b; --text-3:#9b9a97; --line:#e9e9e7;
+        --accent:#2383e2; --good:#0f7b6c; --bad:#e03e3e; --warn:#d9730d; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#191919; --bg-2:#202020; --text:#e6e6e5; --text-2:#aeadaa; --text-3:#7d7c78; --line:#2f2f2f;
+          --accent:#529cca; --good:#4dab9a; --bad:#ff7369; --warn:#ffa344; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+header { padding:28px 32px 0; max-width:1200px; margin:0 auto; }
+h1 { font-size:26px; margin:0 0 4px; }
+.sub { color:var(--text-2); margin:0 0 20px; }
+nav { display:flex; gap:4px; border-bottom:1px solid var(--line); }
+nav button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 12px; font:inherit; color:var(--text-2); cursor:pointer; }
+nav button[aria-selected="true"] { color:var(--text); border-color:var(--text); font-weight:600; }
+main { padding:24px 32px 64px; max-width:1200px; margin:0 auto; }
+section[hidden] { display:none; }
+h2 { font-size:18px; margin:28px 0 10px; }
+h2:first-child { margin-top:0; }
+.hint { color:var(--text-3); font-size:13px; margin:0 0 12px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th { text-align:left; font-weight:500; color:var(--text-3); padding:8px 10px; border-bottom:1px solid var(--line); }
+td { padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.name { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; }
+.note { color:var(--text-2); font-size:13px; margin-top:4px; max-width:560px; }
+input[type=text] { font:inherit; font-size:14px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); width:90px; }
+input.cmt { width:180px; }
+.btn { font:inherit; font-size:13px; padding:5px 12px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); cursor:pointer; }
+.btn:hover { border-color:var(--accent); color:var(--accent); }
+.saved { color:var(--good); font-size:12px; margin-left:6px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 14px; }
+.chip { font:inherit; font-size:13px; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--text-2); cursor:pointer; }
+.chip[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
+.card { border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
+.chart { position:relative; height:320px; }
+.chart.small { height:220px; }
+.big { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+.big div { border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+.big b { display:block; font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+.big span { color:var(--text-2); font-size:13px; }
+.good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+@media (max-width: 700px) {
+  header, main { padding-left:16px; padding-right:16px; }
+  .big { grid-template-columns:1fr; }
+  .tablewrap { overflow-x:auto; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Лаборатория прогноза</h1>
+  <p class="sub">Посадки трамваев «маршрут × час». История январь—октябрь 2025, прогноз ноябрь—декабрь.</p>
+  <nav role="tablist">
+    <button role="tab" data-tab="attempts" aria-selected="true">Попытки</button>
+    <button role="tab" data-tab="series" aria-selected="false">Ряды</button>
+    <button role="tab" data-tab="check" aria-selected="false">Проверка на октябре</button>
+  </nav>
+</header>
+<main>
+
+<section id="attempts">
+  <h2>Попытки</h2>
+  <p class="hint">Загрузил файл на платформу — впиши сюда скор и сохрани. Проверка — WAPE-score той же модели, обученной до 30.09 и проверенной на октябре (и до 31.05 — на июне).</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Версия</th><th class="num">Октябрь</th><th class="num">Июнь</th><th class="num">Скор на эталоне</th><th>Комментарий</th><th></th></tr></thead>
+    <tbody id="att-body"></tbody>
+  </table></div>
+</section>
+
+<section id="series" hidden>
+  <h2>Посадки по дням</h2>
+  <p class="hint">Серым — факт, цветом — прогнозы попыток. Нажми на день, чтобы увидеть часы.</p>
+  <div class="chips" id="route-chips"></div>
+  <div class="card"><div class="chart"><canvas id="daily"></canvas></div></div>
+  <h2 id="hour-title">Часы дня</h2>
+  <div class="card"><div class="chart small"><canvas id="hourly"></canvas></div></div>
+</section>
+
+<section id="check" hidden>
+  <h2>Проверка: обучение до 30 сентября, прогноз октября</h2>
+  <div class="big" id="check-big"></div>
+  <div class="card"><div class="chart"><canvas id="check-daily"></canvas></div></div>
+  <h2>Средний час: факт и прогноз</h2>
+  <div class="card"><div class="chart small"><canvas id="check-hourly"></canvas></div></div>
+</section>
+
+</main>
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const PALETTE = ['--accent', '--warn', '--good', '--bad'];
+const fmt = n => n == null ? '—' : Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 4 });
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.color = css('--text-2');
+Chart.defaults.borderColor = css('--line');
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== b.dataset.tab);
+  if (b.dataset.tab === 'series') loadSeries();
+  if (b.dataset.tab === 'check') loadCheck();
+});
+
+async function loadAttempts() {
+  const log = await (await fetch('/api/attempts')).json();
+  const body = document.getElementById('att-body');
+  body.innerHTML = '';
+  log.slice().reverse().forEach(a => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><div class="name">${a.name}</div><a class="btn" style="display:inline-block;margin-top:6px;text-decoration:none" href="/files/${a.name}.csv" download>Скачать CSV</a><div class="note">${a.note || ''}</div></td>
+      <td class="num">${fmt(a.backtest?.oct)}</td><td class="num">${fmt(a.backtest?.jun)}</td>
+      <td class="num"><input type="text" inputmode="decimal" value="${a.score ?? ''}" placeholder="0,xxxx"></td>
+      <td><input type="text" class="cmt" value="${a.comment ?? ''}" placeholder="заметка"></td>
+      <td><button class="btn">Сохранить</button><span class="saved"></span></td>`;
+    const [score, cmt] = tr.querySelectorAll('input');
+    tr.querySelector('button').onclick = async () => {
+      const v = score.value.trim().replace(',', '.');
+      await fetch('/api/score', { method: 'POST', body: JSON.stringify({ name: a.name, score: v ? Number(v) : null, comment: cmt.value }) });
+      tr.querySelector('.saved').textContent = 'сохранено';
+    };
+    body.appendChild(tr);
+  });
+}
+
+let series, dailyChart, hourlyChart, route = 'all';
+async function loadSeries() {
+  if (!series) series = await (await fetch('/api/series')).json();
+  const chips = document.getElementById('route-chips');
+  if (!chips.children.length) {
+    ['all', ...Object.keys(series.history).filter(k => k !== 'all').sort((a, b) => a - b), '5'].filter((v, i, s) => s.indexOf(v) === i).forEach(r => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = r === 'all' ? 'Вся сеть' : 'Маршрут ' + r;
+      b.setAttribute('aria-pressed', r === route);
+      b.onclick = () => { route = r; chips.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b)); drawDaily(); };
+      chips.appendChild(b);
+    });
+  }
+  drawDaily();
+}
+
+function drawDaily() {
+  const pts = arr => (arr || []).map(([x, y]) => ({ x, y }));
+  const sets = [{ label: 'Факт', data: pts(series.history[route]), borderColor: css('--text-3'), borderWidth: 1.5, pointRadius: 0 }];
+  Object.entries(series.forecasts).forEach(([name, f], i) => sets.push({
+    label: name, data: pts(f[route]), borderColor: css(PALETTE[i % PALETTE.length]), borderWidth: 2, pointRadius: 0 }));
+  dailyChart?.destroy();
+  dailyChart = new Chart(document.getElementById('daily'), {
+    type: 'line', data: { datasets: sets },
+    options: { maintainAspectRatio: false, parsing: true, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      scales: { x: { type: 'category', labels: [...new Set(sets.flatMap(s => s.data.map(p => p.x)))].sort(), ticks: { maxTicksLimit: 12 } },
+                y: { beginAtZero: true, ticks: { callback: v => fmt(v) } } },
+      plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}` } } },
+      onClick: (e, els) => { if (els.length) drawHourly(sets[els[0].datasetIndex].data[els[0].index].x); } }
+  });
+  drawHourly('2025-10-28');
+}
+
+async function drawHourly(date) {
+  const versions = Object.keys(series.forecasts);
+  const future = date > '2025-10-31';
+  const version = versions[versions.length - 1];
+  const url = `/api/hourly?date=${date}&route=${route}` + (future ? `&version=${version}` : '');
+  const vals = await (await fetch(url)).json();
+  document.getElementById('hour-title').textContent = `Часы дня: ${new Date(date).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}` + (future ? ` — прогноз ${version}` : ' — факт');
+  hourlyChart?.destroy();
+  hourlyChart = new Chart(document.getElementById('hourly'), {
+    type: 'bar', data: { labels: [...Array(24).keys()], datasets: [{ data: vals, backgroundColor: css(future ? '--accent' : '--text-3') }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => fmt(v) } } } }
+  });
+}
+
+let checked = false;
+async function loadCheck() {
+  if (checked) return; checked = true;
+  const c = await (await fetch('/api/check')).json();
+  const routes = Object.entries(c.routes).sort((a, b) => a[1] - b[1]);
+  const cls = v => v >= 0.88 ? 'good' : v >= 0.8 ? 'warn' : 'bad';
+  document.getElementById('check-big').innerHTML =
+    `<div><b class="${cls(c.total)}">${fmt(c.total)}</b><span>WAPE-score всей сети за октябрь. Порог 10 баллов — 0,88</span></div>
+     <div><b class="${cls(routes[0][1])}">${fmt(routes[0][1])}</b><span>Хуже всех — маршрут ${routes[0][0]}</span></div>
+     <div><b class="${cls(routes.at(-1)[1])}">${fmt(routes.at(-1)[1])}</b><span>Лучше всех — маршрут ${routes.at(-1)[0]}</span></div>`;
+  new Chart(document.getElementById('check-daily'), {
+    type: 'line', data: { labels: c.daily.map(d => d[0].slice(5)), datasets: [
+      { label: 'Факт', data: c.daily.map(d => d[1]), borderColor: css('--text-3'), pointRadius: 0, borderWidth: 1.5 },
+      { label: 'Прогноз', data: c.daily.map(d => d[2]), borderColor: css('--accent'), pointRadius: 0, borderWidth: 2 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, ticks: { callback: v => fmt(v) } } } }
+  });
+  new Chart(document.getElementById('check-hourly'), {
+    type: 'bar', data: { labels: [...Array(24).keys()], datasets: [
+      { label: 'Факт', data: c.hourly.map(h => h[0]), backgroundColor: css('--text-3') },
+      { label: 'Прогноз', data: c.hourly.map(h => h[1]), backgroundColor: css('--accent') }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+}
+
+loadAttempts();
+</script>
+</body>
+</html>
